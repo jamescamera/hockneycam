@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8E9A93">
+<title>JOINER — a composite camera</title>
+<style>
+  :root{
+    --wall:#8E9A93;
+    --card:#F6F3EC;
+    --ink:#171512;
+    --ink-soft:#6a655c;
+    --pool:#1E6FA8;
+    --amber:#C9761F;
+    --rule:rgba(23,21,18,.18);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;background:var(--wall);overflow:hidden;}
+  body{
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    -webkit-user-select:none;user-select:none;
+    touch-action:manipulation;
+  }
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;}
+  video{position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;top:0;left:0;}
+
+  /* ---- gallery wall label = the whole interface ---- */
+  #label{
+    position:fixed;left:16px;bottom:16px;z-index:20;
+    width:280px;max-width:calc(100% - 32px);
+    background:var(--card);
+    box-shadow:0 1px 2px rgba(0,0,0,.18),0 10px 30px rgba(0,0,0,.22);
+    padding:14px 16px 12px;
+    transition:transform .28s cubic-bezier(.2,.8,.25,1);
+  }
+  @supports not (inset:0){ #stage{top:0;left:0;right:0;bottom:0;position:fixed;} }
+
+  #label .plate{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:17px;line-height:1.15;letter-spacing:.01em;margin:0 0 2px;
+  }
+  #label .plate em{font-style:italic;}
+  #label .medium{
+    font-size:10.5px;line-height:1.45;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink-soft);margin:0;
+  }
+  #label .rule{height:1px;background:var(--rule);margin:11px 0 10px;}
+
+  .row{display:flex;gap:6px;flex-wrap:wrap;}
+  button{
+    font:inherit;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    background:transparent;color:var(--ink);
+    border:1px solid var(--rule);border-radius:0;
+    padding:7px 9px;cursor:pointer;flex:1 1 auto;min-width:0;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  button:hover{border-color:var(--ink);}
+  button:active{background:var(--ink);color:var(--card);}
+  button.on{background:var(--pool);border-color:var(--pool);color:#fff;}
+  button:focus-visible{outline:2px solid var(--pool);outline-offset:2px;}
+
+  #tray{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.2,.8,.25,1);}
+  #tray.open{max-height:420px;}
+  .field{margin:12px 0 0;}
+  .field label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .field label b{font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:14px;background:transparent;margin:0;display:block;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--rule);}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:13px;height:13px;margin-top:-6px;
+    background:var(--ink);border-radius:50%;border:0;
+  }
+  input[type=range]::-moz-range-track{height:1px;background:var(--rule);}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;background:var(--ink);border:0;border-radius:50%;}
+  input[type=range]:focus-visible{outline:2px solid var(--pool);outline-offset:4px;}
+
+  .seg{display:flex;gap:0;border:1px solid var(--rule);}
+  .seg button{border:0;border-right:1px solid var(--rule);flex:1 1 0;padding:7px 4px;}
+  .seg button:last-child{border-right:0;}
+
+  /* ---- opening shutter ---- */
+  #gate{
+    position:fixed;inset:0;z-index:60;background:var(--wall);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    padding:32px;text-align:center;
+  }
+  #gate .plaque{
+    background:var(--card);padding:26px 30px 24px;max-width:340px;
+    box-shadow:0 1px 2px rgba(0,0,0,.18),0 14px 40px rgba(0,0,0,.25);
+  }
+  #gate h1{
+    font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:26px;
+    margin:0 0 8px;letter-spacing:.01em;
+  }
+  #gate h1 em{font-style:italic;}
+  #gate p{font-size:11px;line-height:1.7;letter-spacing:.05em;color:var(--ink-soft);margin:0 0 20px;text-transform:uppercase;}
+  #gate button{width:100%;padding:12px;font-size:10px;border-color:var(--ink);}
+  #err{margin-top:14px;font-size:11px;line-height:1.6;color:var(--amber);letter-spacing:.03em;text-transform:none;display:none;}
+
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:50;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+  @media (max-width:520px){
+    #label{left:10px;right:10px;bottom:10px;width:auto;max-width:none;padding:12px 13px 11px;}
+    #label .plate{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<video id="vid" playsinline autoplay muted></video>
+<div id="flash"></div>
+
+<div id="label">
+  <p class="plate">Untitled <em>Composite</em></p>
+  <p class="medium" id="medium">24 prints · grid · 2026</p>
+  <div class="rule"></div>
+  <div class="row">
+    <button id="bShuffle">Re-shoot</button>
+    <button id="bHold">Hold</button>
+    <button id="bSave">Save</button>
+    <button id="bTray">Setup</button>
+  </div>
+  <div id="tray">
+    <div class="field">
+      <label>Layout</label>
+      <div class="seg" id="segLayout">
+        <button data-v="grid" class="on">Grid</button>
+        <button data-v="scatter">Scatter</button>
+        <button data-v="fan">Fan</button>
+        <button data-v="strip">Strip</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Stock</label>
+      <div class="seg" id="segStock">
+        <button data-v="polaroid" class="on">Polaroid</button>
+        <button data-v="print">Print</button>
+        <button data-v="bleed">Bleed</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Prints <b id="vCount">24</b></label>
+      <input type="range" id="sCount" min="4" max="48" value="24">
+    </div>
+    <div class="field">
+      <label>Lens spread <b id="vLens">50</b></label>
+      <input type="range" id="sLens" min="0" max="100" value="50">
+    </div>
+    <div class="field">
+      <label>Hand <b id="vHand">40</b></label>
+      <input type="range" id="sHand" min="0" max="100" value="40">
+    </div>
+    <div class="field">
+      <label>Seconds per print <b id="vRate">1.4</b></label>
+      <input type="range" id="sRate" min="2" max="80" value="14">
+    </div>
+    <div class="field">
+      <div class="row">
+        <button id="bFlip">Flip camera</button>
+        <button id="bWall">Wall</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gate">
+  <div class="plaque">
+    <h1>Joiner<br><em>a composite camera</em></h1>
+    <p>One subject. Many lenses. Many moments.<br>Assembled while you sit still.</p>
+    <button id="bStart">Open the shutter</button>
+    <div id="err"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var vid    = document.getElementById('vid');
+  var stage  = document.getElementById('stage');
+  var ctx    = stage.getContext('2d');
+  var gate   = document.getElementById('gate');
+  var errEl  = document.getElementById('err');
+  var flash  = document.getElementById('flash');
+  var medium = document.getElementById('medium');
+
+  var W = 0, H = 0, DPR = 1;
+  var srcC = document.createElement('canvas');
+  var srcX = srcC.getContext('2d');
+  var prints = [];
+  var facing = 'user';
+  var stream = null;
+  var held = false;
+  var ready = false;
+
+  var WALLS = ['#8E9A93','#B7AFA0','#2A2E31','#C6C9C4','#7C6F63'];
+  var wallIdx = 0;
+
+  var opt = {
+    layout:'grid', stock:'polaroid',
+    count:24, lens:50, hand:40, rate:14
+  };
+
+  var blendOK = (function(){
+    var c = document.createElement('canvas').getContext('2d');
+    c.globalCompositeOperation = 'multiply';
+    return c.globalCompositeOperation === 'multiply';
+  })();
+
+  var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
+            function(f){ return setTimeout(f,16); };
+
+  /* ---------- grain, baked once ---------- */
+  var grain = document.createElement('canvas');
+  grain.width = grain.height = 96;
+  (function(){
+    var g = grain.getContext('2d');
+    var d = g.createImageData(96,96), i;
+    for(i=0;i<d.data.length;i+=4){
+      var n = 128 + (Math.random()*90-45);
+      d.data[i]=d.data[i+1]=d.data[i+2]=n;
+      d.data[i+3]=26;
+    }
+    g.putImageData(d,0,0);
+  })();
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+  /* ---------- sizing ---------- */
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = stage.clientWidth; H = stage.clientHeight;
+    stage.width = Math.round(W*DPR);
+    stage.height = Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    if(ready) layout();
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', function(){ setTimeout(resize,300); });
+
+  /* ---------- camera ---------- */
+  function start(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      fail('This browser will not hand over a camera. Try Chrome or Safari, over https.');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:960} },
+      audio:false
+    }).then(function(s){
+      if(stream){ var t=stream.getTracks(), i; for(i=0;i<t.length;i++) t[i].stop(); }
+      stream = s;
+      vid.srcObject = s;
+      var p = vid.play();
+      if(p && p['catch']) p['catch'](function(){});
+      vid.addEventListener('loadedmetadata', begin);
+      if(vid.videoWidth) begin();
+    })['catch'](function(e){
+      fail('No camera. ' + (e && e.name ? e.name : '') + ' — check the permission for this page in your browser settings, then reload.');
+    });
+  }
+
+  function fail(msg){
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  }
+
+  function begin(){
+    if(ready) return;
+    ready = true;
+    gate.style.display = 'none';
+    resize();
+    layout();
+    tick();
+  }
+
+  /* ---------- source frame ---------- */
+  function grab(){
+    if(!vid.videoWidth) return false;
+    var vw = vid.videoWidth, vh = vid.videoHeight;
+    if(srcC.width !== vw){ srcC.width = vw; srcC.height = vh; }
+    srcX.save();
+    if(facing === 'user'){ srcX.translate(vw,0); srcX.scale(-1,1); }
+    srcX.drawImage(vid,0,0,vw,vh);
+    srcX.restore();
+    return true;
+  }
+
+  /* ---------- layout ---------- */
+  function stockShape(){
+    if(opt.stock === 'polaroid') return {ar:1, side:.065, top:.065, bot:.20};
+    if(opt.stock === 'print')    return {ar:0.75, side:.035, top:.035, bot:.035};
+    return {ar:0.78, side:0, top:0, bot:0};
+  }
+
+  function layout(){
+    var n = opt.count;
+    var sh = stockShape();
+    var hand = opt.hand/100;
+    prints = [];
+
+    var i, j, k = 0;
+    var cols = Math.max(2, Math.round(Math.sqrt(n * (W/Math.max(H,1)))));
+    var rows = Math.ceil(n/cols);
+
+    for(k=0;k<n;k++){
+      i = k % cols; j = Math.floor(k/cols);
+      var cx, cy, rot, size;
+
+      var cell = Math.min(W/cols, H/rows);
+
+      if(opt.layout === 'grid'){
+        cx = (i + .5)/cols * W;
+        cy = (j + .5)/rows * H;
+        cx += rand(-1,1) * cell * .16 * hand;
+        cy += rand(-1,1) * cell * .16 * hand;
+        rot = rand(-1,1) * 0.10 * hand;
+        size = cell * rand(1.12, 1.34);
+      } else if(opt.layout === 'scatter'){
+        cx = rand(.12,.88) * W;
+        cy = rand(.14,.86) * H;
+        rot = rand(-1,1) * 0.55 * hand;
+        size = cell * rand(0.9, 1.9);
+      } else if(opt.layout === 'fan'){
+        var a = (k/n) * Math.PI * 2;
+        var r = Math.min(W,H) * (0.06 + 0.34 * Math.sqrt(k/n));
+        cx = W/2 + Math.cos(a*1.7) * r;
+        cy = H/2 + Math.sin(a*1.7) * r * 0.9;
+        rot = a*0.3 * hand + rand(-.2,.2)*hand;
+        size = cell * rand(1.0, 1.7);
+      } else { // strip
+        var per = Math.max(1, Math.floor(W / (Math.min(W,H)*0.26)));
+        var sc = k % per, sr = Math.floor(k/per);
+        size = Math.min(W/per, H/Math.max(1,Math.ceil(n/per))) * 1.05;
+        cx = (sc + .5)/per * W;
+        cy = (sr + .5)/Math.max(1,Math.ceil(n/per)) * H;
+        rot = rand(-1,1) * 0.05 * hand;
+      }
+
+      var photoW = size;
+      var photoH = size * (1/sh.ar);
+      if(sh.ar > 1) { photoH = size; photoW = size * sh.ar; }
+
+      // where in the subject this print looks, and how tight its lens is
+      var lens = 0.55 + (opt.lens/100) * rand(-0.42, 1.15);
+      var u, v;
+      if(opt.layout === 'grid' || opt.layout === 'strip'){
+        u = (i + .5)/cols; v = (j + .5)/rows;
+        if(opt.layout === 'strip'){ u = ((k % 5) + .5)/5; v = ((Math.floor(k/5)) % 4 + .5)/4; }
+        u += rand(-1,1) * .05 * hand; v += rand(-1,1) * .05 * hand;
+      } else {
+        u = clamp(cx/W + rand(-.08,.08), 0, 1);
+        v = clamp(cy/H + rand(-.08,.08), 0, 1);
+      }
+
+      prints.push({
+        cx:cx, cy:cy, rot:rot,
+        pw:photoW, ph:photoH,
+        side:sh.side, top:sh.top, bot:sh.bot,
+        u:clamp(u,0,1), v:clamp(v,0,1),
+        lens:clamp(lens, 0.10, 1.0),
+        warm: rand(-1,1),
+        expo: rand(-1,1),
+        canvas: null,
+        next: 0,
+        every: 0,
+        z: Math.random()
+      });
+    }
+
+    prints.sort(function(a,b){ return a.z - b.z; });
+    for(k=0;k<prints.length;k++){
+      prints[k].every = (opt.rate/10) * 1000 * rand(0.45,1.75);
+      prints[k].next = performance.now() + Math.random() * prints[k].every;
+      shoot(prints[k]);
+    }
+    updateLabel();
+  }
+
+  /* ---------- expose one print ---------- */
+  function shoot(p){
+    if(!srcC.width) return;
+    var res = clamp(Math.round(p.pw * DPR), 64, 420);
+    if(!p.canvas){ p.canvas = document.createElement('canvas'); }
+    var cw = res, ch = Math.round(res * (p.ph/p.pw));
+    if(p.canvas.width !== cw || p.canvas.height !== ch){ p.canvas.width = cw; p.canvas.height = ch; }
+    var g = p.canvas.getContext('2d');
+
+    var sw = srcC.width * p.lens;
+    var sh2 = sw * (p.ph/p.pw);
+    if(sh2 > srcC.height){ sh2 = srcC.height; sw = sh2 * (p.pw/p.ph); }
+    var sx = clamp(p.u * srcC.width  - sw/2, 0, srcC.width  - sw);
+    var sy = clamp(p.v * srcC.height - sh2/2, 0, srcC.height - sh2);
+
+    g.clearRect(0,0,cw,ch);
+    g.drawImage(srcC, sx, sy, sw, sh2, 0, 0, cw, ch);
+
+    // exposure drift between prints
+    var e = p.expo;
+    g.globalCompositeOperation = 'source-over';
+    if(e > 0) g.fillStyle = 'rgba(255,252,244,' + (e*0.13).toFixed(3) + ')';
+    else      g.fillStyle = 'rgba(12,10,16,'   + (-e*0.15).toFixed(3) + ')';
+    g.fillRect(0,0,cw,ch);
+
+    // chemistry: some prints ran warm, some cold
+    if(blendOK){
+      g.globalCompositeOperation = 'multiply';
+      g.fillStyle = p.warm > 0
+        ? 'rgba(255,226,186,' + (p.warm*0.30 + .06).toFixed(3) + ')'
+        : 'rgba(198,224,255,' + (-p.warm*0.26 + .06).toFixed(3) + ')';
+      g.fillRect(0,0,cw,ch);
+      g.globalCompositeOperation = 'source-over';
+    }
+
+    // grain
+    var pat = g.createPattern(grain,'repeat');
+    if(pat){ g.fillStyle = pat; g.fillRect(0,0,cw,ch); }
+
+    p.shotAt = performance.now();
+  }
+
+  /* ---------- render ---------- */
+  function draw(){
+    ctx.fillStyle = WALLS[wallIdx];
+    ctx.fillRect(0,0,W,H);
+
+    var i, p, fw, fh, ox, oy;
+    for(i=0;i<prints.length;i++){
+      p = prints[i];
+      if(!p.canvas) continue;
+
+      fw = p.pw * (1 + p.side*2);
+      fh = p.ph + p.pw*p.top + p.pw*p.bot;
+      ox = -fw/2; oy = -fh/2;
+
+      ctx.save();
+      ctx.translate(p.cx, p.cy);
+      ctx.rotate(p.rot);
+
+      if(opt.stock !== 'bleed'){
+        ctx.shadowColor = 'rgba(0,0,0,.34)';
+        ctx.shadowBlur = 14;
+        ctx.shadowOffsetY = 5;
+        ctx.fillStyle = '#F7F4ED';
+        ctx.fillRect(ox, oy, fw, fh);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      } else {
+        ctx.shadowColor = 'rgba(0,0,0,.28)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 3;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(ox, oy, fw, fh);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      }
+
+      ctx.drawImage(p.canvas, ox + p.pw*p.side, oy + p.pw*p.top, p.pw, p.ph);
+      ctx.restore();
+    }
+  }
+
+  function tick(){
+    if(grab() && !held){
+      var now = performance.now(), i;
+      for(i=0;i<prints.length;i++){
+        if(now >= prints[i].next){
+          shoot(prints[i]);
+          prints[i].next = now + prints[i].every;
+        }
+      }
+    }
+    draw();
+    raf(tick);
+  }
+
+  /* ---------- label copy ---------- */
+  function updateLabel(){
+    var names = {grid:'grid', scatter:'scatter', fan:'fan', strip:'strip'};
+    var stocks = {polaroid:'polaroid', print:'C-print', bleed:'bleed'};
+    medium.textContent = opt.count + ' prints · ' + stocks[opt.stock] + ' · ' + names[opt.layout] + ' · 2026';
+  }
+
+  /* ---------- controls ---------- */
+  function seg(id, key, after){
+    var wrap = document.getElementById(id);
+    var btns = wrap.getElementsByTagName('button');
+    var i;
+    for(i=0;i<btns.length;i++){
+      (function(b){
+        b.addEventListener('click', function(){
+          var j;
+          for(j=0;j<btns.length;j++) btns[j].className = '';
+          b.className = 'on';
+          opt[key] = b.getAttribute('data-v');
+          if(after) after();
+        });
+      })(btns[i]);
+    }
+  }
+  seg('segLayout','layout', layout);
+  seg('segStock','stock', layout);
+
+  function slide(id, out, key, fmt, live){
+    var s = document.getElementById(id), o = document.getElementById(out);
+    s.addEventListener('input', function(){
+      opt[key] = parseInt(s.value,10);
+      o.textContent = fmt ? fmt(opt[key]) : opt[key];
+      if(live) live();
+    });
+  }
+  slide('sCount','vCount','count', null, layout);
+  slide('sLens','vLens','lens', null, layout);
+  slide('sHand','vHand','hand', null, layout);
+  slide('sRate','vRate','rate', function(v){ return (v/10).toFixed(1); }, function(){
+    var i;
+    for(i=0;i<prints.length;i++) prints[i].every = (opt.rate/10)*1000*rand(0.45,1.75);
+  });
+
+  document.getElementById('bTray').addEventListener('click', function(){
+    var t = document.getElementById('tray');
+    var open = t.className === 'open';
+    t.className = open ? '' : 'open';
+    this.className = open ? '' : 'on';
+  });
+
+  document.getElementById('bShuffle').addEventListener('click', function(){ layout(); });
+
+  document.getElementById('bHold').addEventListener('click', function(){
+    held = !held;
+    this.className = held ? 'on' : '';
+    this.textContent = held ? 'Held' : 'Hold';
+  });
+
+  document.getElementById('bFlip').addEventListener('click', function(){
+    facing = (facing === 'user') ? 'environment' : 'user';
+    start();
+  });
+
+  document.getElementById('bWall').addEventListener('click', function(){
+    wallIdx = (wallIdx + 1) % WALLS.length;
+    document.documentElement.style.setProperty('--wall', WALLS[wallIdx]);
+  });
+
+  document.getElementById('bSave').addEventListener('click', function(){
+    flash.style.transition = 'none';
+    flash.style.opacity = '.85';
+    setTimeout(function(){
+      flash.style.transition = 'opacity .5s';
+      flash.style.opacity = '0';
+    }, 40);
+
+    var url;
+    try { url = stage.toDataURL('image/png'); } catch(e){ return; }
+    var a = document.createElement('a');
+    if('download' in a){
+      a.href = url;
+      a.download = 'joiner-' + Date.now() + '.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } else {
+      var w = window.open('','_blank');
+      if(w) w.document.write('<img src="'+url+'" style="width:100%">');
+    }
+  });
+
+  document.getElementById('bStart').addEventListener('click', start);
+
+  resize();
+})();
+</script>
+</body>
+</html>
