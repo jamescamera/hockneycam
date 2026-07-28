@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#8E9A93">
 <title>JOINER — a composite camera</title>
+<meta name="description" content="One subject, many lenses, many moments — a live Hockney joiner in your browser. Nothing leaves your device.">
+
+<!-- social cards: swap the relative share.png for a full https:// URL once your domain resolves -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Joiner — a composite camera">
+<meta property="og:description" content="One subject, many lenses, many moments — a live Hockney joiner in your browser. Nothing leaves your device.">
+<meta property="og:image" content="share.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Joiner — a composite camera">
+<meta name="twitter:description" content="One subject, many lenses, many moments — a live Hockney joiner in your browser. Nothing leaves your device.">
+<meta name="twitter:image" content="share.png">
 <style>
   :root{
     --wall:#8E9A93;
@@ -100,7 +111,7 @@
 
   #sheet{
     position:fixed;left:0;right:0;bottom:0;z-index:46;
-    max-height:62vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:rgba(246,243,236,.94);
     -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
     padding:20px 16px calc(env(safe-area-inset-bottom,0px) + 18px);
@@ -181,6 +192,15 @@
     #sheet{left:auto;right:20px;bottom:20px;width:430px;max-height:76vh;transform:translateY(120%);}
     #sheet.on{transform:translateY(0);}
   }
+  .credit{
+    display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
+    margin:18px 0 0;padding-top:14px;border-top:1px solid var(--rule);
+    font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  }
+  .credit a{color:inherit;text-decoration:none;border-bottom:1px solid currentColor;opacity:.75;}
+  .credit a:hover{opacity:1;}
+  .credit span{opacity:.55;}
+  #sheet{transition:transform .3s cubic-bezier(.2,.8,.25,1), opacity .18s;}
 </style>
 </head>
 <body>
@@ -246,6 +266,11 @@
     </div>
   </div>
   <p class="note">Big button takes a still · small button records · drag a print to move it · pinch to zoom its lens and turn it · double tap to re-expose</p>
+  <div class="credit">
+    <a href="./">← All cameras</a>
+    <a href="LICENSE">CC BY-NC 4.0</a>
+    <span>Nothing leaves your device</span>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -359,15 +384,32 @@
   window.addEventListener('orientationchange', function(){ setTimeout(resize,300); });
 
   /* ---------- camera ---------- */
+  /* Android will hand back the same camera unless the old one is released
+     first, and plain facingMode is only a hint — exact, then fall back. */
+  function stopStream(){
+    if(stream){
+      var t=stream.getTracks(), i;
+      for(i=0;i<t.length;i++) t[i].stop();
+      stream=null;
+    }
+    try { vid.srcObject=null; } catch(e){}
+  }
+  function askCam(fm){
+    var v={ width:{ideal:1280}, height:{ideal:960} };
+    if(fm) v.facingMode=fm;
+    return navigator.mediaDevices.getUserMedia({ video:v, audio:false });
+  }
+
   function start(){
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       fail('This browser will not hand over a camera. Try Chrome or Safari, over https.');
       return;
     }
-    navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:facing, width:{ideal:1280}, height:{ideal:960} }, audio:false
-    }).then(function(s){
-      if(stream){ var t=stream.getTracks(),i; for(i=0;i<t.length;i++) t[i].stop(); }
+    stopStream();
+    askCam({exact:facing})
+      ['catch'](function(){ return askCam(facing); })
+      ['catch'](function(){ return askCam(null); })
+      .then(function(s){
       stream=s; vid.srcObject=s;
       var p=vid.play();
       if(p && p['catch']) p['catch'](function(){});
@@ -904,6 +946,32 @@
     wallIdx=(wallIdx+1)%WALLS.length;
     document.documentElement.style.setProperty('--wall',WALLS[wallIdx]);
   });
+
+  /* while a control is being dragged, get the panel out of the way
+     so the change can actually be seen */
+  (function(){
+    var peekT=null;
+    function peek(on){
+      if(on){
+        if(peekT){ clearTimeout(peekT); peekT=null; }
+        sheet.style.opacity='.14';
+        scrim.style.opacity='0';
+      } else {
+        if(peekT) clearTimeout(peekT);
+        peekT=setTimeout(function(){
+          sheet.style.opacity='';
+          scrim.style.opacity='';
+        }, 240);
+      }
+    }
+    var rs=sheet.getElementsByTagName('input'), i;
+    for(i=0;i<rs.length;i++){
+      rs[i].addEventListener('touchstart', function(){ peek(true); }, false);
+      rs[i].addEventListener('mousedown',  function(){ peek(true); }, false);
+    }
+    window.addEventListener('touchend', function(){ peek(false); }, false);
+    window.addEventListener('mouseup',  function(){ peek(false); }, false);
+  })();
 
   document.getElementById('bStart').addEventListener('click', start);
 
